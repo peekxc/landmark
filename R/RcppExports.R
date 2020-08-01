@@ -9,7 +9,7 @@ landmarks_maxmin_cpp <- function(x, num = 0L, radius = -1, seed_index = 1L, cove
     .Call('_landmark_landmarks_maxmin_cpp', PACKAGE = 'landmark', x, num, radius, seed_index, cover)
 }
 
-landmark_maxmin <- function(x, n, seed_index = 1L) {
-    .Call('_landmark_landmark_maxmin', PACKAGE = 'landmark', x, n, seed_index)
+maxmin_f <- function(x, eps, n, dist_f, metric = 1L, seed = 0L, pick = 0L, cover = FALSE) {
+    .Call('_landmark_maxmin_f', PACKAGE = 'landmark', x, eps, n, dist_f, metric, seed, pick, cover)
 }
 

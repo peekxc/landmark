@@ -35,16 +35,21 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// landmark_maxmin
-IntegerVector landmark_maxmin(const NumericMatrix& x, const int n, const int seed_index);
-RcppExport SEXP _landmark_landmark_maxmin(SEXP xSEXP, SEXP nSEXP, SEXP seed_indexSEXP) {
+// maxmin_f
+List maxmin_f(const NumericMatrix& x, const double eps, const size_t n, Function dist_f, const size_t metric, const size_t seed, const size_t pick, const bool cover);
+RcppExport SEXP _landmark_maxmin_f(SEXP xSEXP, SEXP epsSEXP, SEXP nSEXP, SEXP dist_fSEXP, SEXP metricSEXP, SEXP seedSEXP, SEXP pickSEXP, SEXP coverSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< const NumericMatrix& >::type x(xSEXP);
-    Rcpp::traits::input_parameter< const int >::type n(nSEXP);
-    Rcpp::traits::input_parameter< const int >::type seed_index(seed_indexSEXP);
-    rcpp_result_gen = Rcpp::wrap(landmark_maxmin(x, n, seed_index));
+    Rcpp::traits::input_parameter< const double >::type eps(epsSEXP);
+    Rcpp::traits::input_parameter< const size_t >::type n(nSEXP);
+    Rcpp::traits::input_parameter< Function >::type dist_f(dist_fSEXP);
+    Rcpp::traits::input_parameter< const size_t >::type metric(metricSEXP);
+    Rcpp::traits::input_parameter< const size_t >::type seed(seedSEXP);
+    Rcpp::traits::input_parameter< const size_t >::type pick(pickSEXP);
+    Rcpp::traits::input_parameter< const bool >::type cover(coverSEXP);
+    rcpp_result_gen = Rcpp::wrap(maxmin_f(x, eps, n, dist_f, metric, seed, pick, cover));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -52,7 +57,7 @@ END_RCPP
 static const R_CallMethodDef CallEntries[] = {
     {"_landmark_landmarks_lastfirst_cpp", (DL_FUNC) &_landmark_landmarks_lastfirst_cpp, 5},
     {"_landmark_landmarks_maxmin_cpp", (DL_FUNC) &_landmark_landmarks_maxmin_cpp, 5},
-    {"_landmark_landmark_maxmin", (DL_FUNC) &_landmark_landmark_maxmin, 3},
+    {"_landmark_maxmin_f", (DL_FUNC) &_landmark_maxmin_f, 8},
     {NULL, NULL, 0}
 };
 

@@ -12,9 +12,18 @@ using std::size_t;
 // define a tolerance for distances to avoid floating point rounding errors
 #define EPS_TOL 0.001
 
+inline double max_dist(const NumericVector& x, const NumericVector& y){
+  return(max(abs(x-y)));
+}
+
+inline double man_dist(const NumericVector& x, const NumericVector& y){
+  NumericVector diff = abs(x-y);
+  return(sum(diff));
+}
+
 inline double sq_dist(const NumericVector& x, const NumericVector& y){
   NumericVector diff = x-y;
-  return(sum(pow(diff, 2.0)));
+  return(sqrt(sum(pow(diff, 2.0))));
 }
 
 // Description:
@@ -45,7 +54,7 @@ List landmarks_maxmin_cpp(const NumericMatrix& x, int num = 0, float radius = -1
         num = num_pts;
     }
     if(num == 0 && radius == -1){num = std::min(num_pts,24);} // no parameters passed -> default behavior
-    if(radius == -1){radius = FLT_MAX;} // Rcpp does now allow use of c++ constants (e.g. FLT_MAX) in parameters
+    if(radius == -1){radius = FLT_MAX;} // Rcpp does not allow use of c++ constants (e.g. FLT_MAX) in parameters
 
     // store indices and values of X\L
     map<int, vector<double>> pts_left;
@@ -135,33 +144,127 @@ List landmarks_maxmin_cpp(const NumericMatrix& x, int num = 0, float radius = -1
     return(ret);
 }
 
-
-// Original function to use the euclidean maxmin procedure to choose n landmarks
-// (written by Matt Piekenbrock)
-//
+// x       := point cloud (each row is one point)
+// eps     := distance threshold used as a stopping criterion for the maxmin procedure
+// n       := cardinality threshold used as a stopping criterion for the maxmin procedure
+// dist_f  := (optional) custom distance function
+// metric  := metric to use. If 0, uses `dist_f`, otherwise picks one of the available metrics.
+// seed    := initial point (default is point at index 0)
+// pick    := criterion to break ties. Possible values include 0 (first), 1 (random), or 2 (last).
+// cover   := whether to report set membership for each point
 // [[Rcpp::export]]
-IntegerVector landmark_maxmin(const NumericMatrix& x, const int n, const int seed_index = 1) {
+List maxmin_f(const NumericMatrix& x, const double eps, const size_t n, Function dist_f,
+              const size_t metric = 1, const size_t seed = 0, const size_t pick = 0,
+              const bool cover = false) {
+  using dist_t = typename std::function<double(const NumericVector&, const NumericVector&)>;
   const size_t n_pts = x.nrow();
+  if (seed < 0 || seed >= n_pts){ stop("Invalid seed point."); }
+  if (eps == -1.0 && n == 0){ stop("Must supply either positive 'eps' or positive 'n'."); }
+  if (pick > 2){ stop("tiebreaker 'pick' choice must be in { 0, 1, 2 }."); }
+
+  // Make a function that acts as a sentinel
+  enum CRITERION { NUM, EPS, NUM_OR_EPS }; // These are the only ones that make sense
+  const CRITERION stopping_criterion = (eps == -1.0) ? NUM : ((n == 0) ? EPS : NUM_OR_EPS);
+  const auto is_finished = [stopping_criterion, eps, n](size_t n_landmarks, double c_eps){
+    switch(stopping_criterion){
+      case NUM: return(n_landmarks >= n);
+      case EPS: return(c_eps <= eps);
+      case NUM_OR_EPS: return(n_landmarks >= n || c_eps <= eps);
+    }
+  };
+
+  // Choose the distance function
+  dist_t dist;
+  if (metric == 0){
+    dist = [&dist_f](const NumericVector& x, const NumericVector& y) -> double { return as< double >(dist_f(x, y)); };
+  } else if (metric == 1){
+    dist = sq_dist;
+  } else if (metric == 2){
+    dist = man_dist;
+  } else if (metric == 3){
+    dist = max_dist;
+  } else {
+    stop("Invalid distance metric option chosen.");
+  }
+
+  // Indices of possible candidate landmarks
+  vector< size_t > candidate_pts(n_pts);
+  std::iota(begin(candidate_pts), end(candidate_pts), 0);
+
+  // Choose the initial landmark
+  vector< size_t > lm = vector< size_t >();
+  if (n != 0){ lm.reserve(n); }
+  lm.push_back(seed);
+
+  // Indices assign each point to its closest landmark
+  vector< size_t > closest_landmark(n_pts, seed);
+
+  // Preallocate distance vector for landmarks; one for each point
   std::vector< double > lm_dist(n_pts, std::numeric_limits<double>::infinity());
-  IntegerVector landmark_idx = no_init_vector(n);
-  //landmark_idx[seed_index] = 0;
-  landmark_idx[0] = seed_index-1;
-  IntegerVector::iterator c_landmark = landmark_idx.begin();
-  double new_min_dist;
-  std::generate(landmark_idx.begin()+1, landmark_idx.end(), [&](){
-    size_t i = 0;
-    new_min_dist = std::numeric_limits<double>::infinity();
 
-    // Replace nearest landmark distances
-    std::replace_if(lm_dist.begin(), lm_dist.end(), [&i, &x, &c_landmark, &new_min_dist](const double c_dist){
-      new_min_dist = sq_dist(x.row(*c_landmark), x.row(i++));
-      return(new_min_dist < c_dist);
-    }, new_min_dist);
+  // Generate the landmarks
+  bool stop_reached = false;
+  while (!stop_reached){
+    // Inductively, replace point-to-landmark distances if lower than previously computed
+    const size_t c_lm = lm.back();
 
-    // Find the point that maximizes said distances, move to next landmark
-    c_landmark++;
-    auto max_landmark = std::max_element(lm_dist.begin(), lm_dist.end());
-    return(std::distance(lm_dist.begin(), max_landmark));
-  });
-  return(landmark_idx+1); // 1-based return
+    // Update non-landmark points with distance to nearest landmark
+    for (auto idx: candidate_pts){
+      double c_dist = dist(x.row(c_lm), x.row(idx));
+      if (c_dist < lm_dist[idx]){
+        lm_dist[idx] = c_dist;        // update minimum landmark distance
+        closest_landmark[idx] = c_lm; // mark which landmark was closest
+      }
+    }
+
+    // Of the remaining candidate points, find the one with the maximum landmark distance
+    auto max_landmark = std::max_element(begin(candidate_pts), end(candidate_pts), [&lm_dist](size_t ii, size_t jj){
+      return lm_dist[ii] < lm_dist[jj];
+    });
+
+    // If not greedily picking the first candidate point, partition the candidate points, then use corresponding strategy
+    if (pick > 0 && max_landmark != end(candidate_pts)){
+      double max_lm_dist = lm_dist[(*max_landmark)];
+      auto it = std::partition(begin(candidate_pts), end(candidate_pts), [max_lm_dist, &lm_dist](size_t j){
+        return lm_dist[j] == max_lm_dist;
+      });
+      // Pick == 1 => the last candidate
+      if (pick == 1){
+        max_landmark = it != begin(candidate_pts) ? std::prev(it) : begin(candidate_pts);
+      } else {
+      // Pick > 1 => random candidate with max distance
+        const size_t n_cand = std::distance(begin(candidate_pts), it);
+        max_landmark = (n_cand == 1) ? begin(candidate_pts) : begin(candidate_pts) + (rand() % n_cand);
+      }
+    }
+
+    // If the iterator is valid, we have a new landmark, otherwise we're finished
+    if (max_landmark != end(candidate_pts)){
+      // Rprintf("max lm dist: %g\n", lm_dist[(*max_landmark)]);
+      stop_reached = is_finished(lm.size(), lm_dist[(*max_landmark)]);
+      lm.push_back(*max_landmark);
+      candidate_pts.erase(max_landmark);
+    } else {
+      stop_reached = true;
+    }
+  } // while(!finished())
+
+  // Prepare return
+  IntegerVector lm_int = wrap(lm);
+  List ret = List::create(_["landmarks"] = lm_int+1, _["cover"] = R_NilValue);
+
+  // If requested, collect points into a cover
+  if (cover){
+    vector< IntegerVector > cover_sets(lm.size());
+    for (size_t i = 0; i < n_pts; ++i){
+      cover_sets[closest_landmark[i]].push_back(i+1); // +1 for 1-based indices
+    }
+    ret["cover"] = wrap(cover_sets);
+    ret.attr("radius") = lm_dist[lm.back()]; // capture radius needed to make the cover
+  }
+
+  // Return
+  return(ret);
 }
+
+
