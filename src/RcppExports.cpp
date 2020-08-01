@@ -35,9 +35,9 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// maxmin_f
-List maxmin_f(const NumericMatrix& x, const double eps, const size_t n, Function dist_f, const size_t metric, const size_t seed, const size_t pick, const bool cover);
-RcppExport SEXP _landmark_maxmin_f(SEXP xSEXP, SEXP epsSEXP, SEXP nSEXP, SEXP dist_fSEXP, SEXP metricSEXP, SEXP seedSEXP, SEXP pickSEXP, SEXP coverSEXP) {
+// maxmin_pc
+List maxmin_pc(const NumericMatrix& x, const double eps, const size_t n, Function dist_f, const size_t metric, const size_t seed, const size_t pick, const bool cover);
+RcppExport SEXP _landmark_maxmin_pc(SEXP xSEXP, SEXP epsSEXP, SEXP nSEXP, SEXP dist_fSEXP, SEXP metricSEXP, SEXP seedSEXP, SEXP pickSEXP, SEXP coverSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -49,7 +49,24 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const size_t >::type seed(seedSEXP);
     Rcpp::traits::input_parameter< const size_t >::type pick(pickSEXP);
     Rcpp::traits::input_parameter< const bool >::type cover(coverSEXP);
-    rcpp_result_gen = Rcpp::wrap(maxmin_f(x, eps, n, dist_f, metric, seed, pick, cover));
+    rcpp_result_gen = Rcpp::wrap(maxmin_pc(x, eps, n, dist_f, metric, seed, pick, cover));
+    return rcpp_result_gen;
+END_RCPP
+}
+// maxmin_dist
+List maxmin_dist(const NumericVector& x, const size_t n_pts, const double eps, const size_t n, const size_t seed, const size_t pick, const bool cover);
+RcppExport SEXP _landmark_maxmin_dist(SEXP xSEXP, SEXP n_ptsSEXP, SEXP epsSEXP, SEXP nSEXP, SEXP seedSEXP, SEXP pickSEXP, SEXP coverSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const NumericVector& >::type x(xSEXP);
+    Rcpp::traits::input_parameter< const size_t >::type n_pts(n_ptsSEXP);
+    Rcpp::traits::input_parameter< const double >::type eps(epsSEXP);
+    Rcpp::traits::input_parameter< const size_t >::type n(nSEXP);
+    Rcpp::traits::input_parameter< const size_t >::type seed(seedSEXP);
+    Rcpp::traits::input_parameter< const size_t >::type pick(pickSEXP);
+    Rcpp::traits::input_parameter< const bool >::type cover(coverSEXP);
+    rcpp_result_gen = Rcpp::wrap(maxmin_dist(x, n_pts, eps, n, seed, pick, cover));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -57,7 +74,8 @@ END_RCPP
 static const R_CallMethodDef CallEntries[] = {
     {"_landmark_landmarks_lastfirst_cpp", (DL_FUNC) &_landmark_landmarks_lastfirst_cpp, 5},
     {"_landmark_landmarks_maxmin_cpp", (DL_FUNC) &_landmark_landmarks_maxmin_cpp, 5},
-    {"_landmark_maxmin_f", (DL_FUNC) &_landmark_maxmin_f, 8},
+    {"_landmark_maxmin_pc", (DL_FUNC) &_landmark_maxmin_pc, 8},
+    {"_landmark_maxmin_dist", (DL_FUNC) &_landmark_maxmin_dist, 7},
     {NULL, NULL, 0}
 };
 

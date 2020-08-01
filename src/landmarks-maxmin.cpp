@@ -144,23 +144,24 @@ List landmarks_maxmin_cpp(const NumericMatrix& x, int num = 0, float radius = -1
     return(ret);
 }
 
-// x       := point cloud (each row is one point)
+// a Distance Function here just returns the distance between two points, given their *indices*
+using DistFunction = typename std::function<double(size_t, size_t)>;
+
+// dist_f  := distance function between two (indexed) points
+// n_pts   := number of points in the data set
 // eps     := distance threshold used as a stopping criterion for the maxmin procedure
 // n       := cardinality threshold used as a stopping criterion for the maxmin procedure
-// dist_f  := (optional) custom distance function
 // metric  := metric to use. If 0, uses `dist_f`, otherwise picks one of the available metrics.
 // seed    := initial point (default is point at index 0)
 // pick    := criterion to break ties. Possible values include 0 (first), 1 (random), or 2 (last).
 // cover   := whether to report set membership for each point
-// [[Rcpp::export]]
-List maxmin_f(const NumericMatrix& x, const double eps, const size_t n, Function dist_f,
-              const size_t metric = 1, const size_t seed = 0, const size_t pick = 0,
+List maxmin_f(DistFunction dist_f, const size_t n_pts,
+              const double eps, const size_t n,
+              const size_t seed = 0, const size_t pick = 0,
               const bool cover = false) {
-  using dist_t = typename std::function<double(const NumericVector&, const NumericVector&)>;
-  const size_t n_pts = x.nrow();
-  if (seed < 0 || seed >= n_pts){ stop("Invalid seed point."); }
   if (eps == -1.0 && n == 0){ stop("Must supply either positive 'eps' or positive 'n'."); }
   if (pick > 2){ stop("tiebreaker 'pick' choice must be in { 0, 1, 2 }."); }
+  if (seed >= n_pts){ stop("Invalid seed index given."); }
 
   // Make a function that acts as a sentinel
   enum CRITERION { NUM, EPS, NUM_OR_EPS }; // These are the only ones that make sense
@@ -173,20 +174,6 @@ List maxmin_f(const NumericMatrix& x, const double eps, const size_t n, Function
     }
   };
 
-  // Choose the distance function
-  dist_t dist;
-  if (metric == 0){
-    dist = [&dist_f](const NumericVector& x, const NumericVector& y) -> double { return as< double >(dist_f(x, y)); };
-  } else if (metric == 1){
-    dist = sq_dist;
-  } else if (metric == 2){
-    dist = man_dist;
-  } else if (metric == 3){
-    dist = max_dist;
-  } else {
-    stop("Invalid distance metric option chosen.");
-  }
-
   // Indices of possible candidate landmarks
   vector< size_t > candidate_pts(n_pts);
   std::iota(begin(candidate_pts), end(candidate_pts), 0);
@@ -196,7 +183,10 @@ List maxmin_f(const NumericMatrix& x, const double eps, const size_t n, Function
   if (n != 0){ lm.reserve(n); }
   lm.push_back(seed);
 
-  // Indices assign each point to its closest landmark
+  // Remove initial seed from candidates
+  candidate_pts.erase(begin(candidate_pts) + seed);
+
+  // Indices assign each point to its closest landmark index
   vector< size_t > closest_landmark(n_pts, seed);
 
   // Preallocate distance vector for landmarks; one for each point
@@ -210,10 +200,10 @@ List maxmin_f(const NumericMatrix& x, const double eps, const size_t n, Function
 
     // Update non-landmark points with distance to nearest landmark
     for (auto idx: candidate_pts){
-      double c_dist = dist(x.row(c_lm), x.row(idx));
+      double c_dist = dist_f(c_lm, idx);
       if (c_dist < lm_dist[idx]){
-        lm_dist[idx] = c_dist;        // update minimum landmark distance
-        closest_landmark[idx] = c_lm; // mark which landmark was closest
+        lm_dist[idx] = c_dist;                  // update minimum landmark distance
+        closest_landmark[idx] = lm.size() - 1;  // mark which landmark was closest, by index
       }
     }
 
@@ -241,8 +231,8 @@ List maxmin_f(const NumericMatrix& x, const double eps, const size_t n, Function
     // If the iterator is valid, we have a new landmark, otherwise we're finished
     if (max_landmark != end(candidate_pts)){
       // Rprintf("max lm dist: %g\n", lm_dist[(*max_landmark)]);
-      stop_reached = is_finished(lm.size(), lm_dist[(*max_landmark)]);
       lm.push_back(*max_landmark);
+      stop_reached = is_finished(lm.size(), lm_dist[(*max_landmark)]);
       candidate_pts.erase(max_landmark);
     } else {
       stop_reached = true;
@@ -257,14 +247,62 @@ List maxmin_f(const NumericMatrix& x, const double eps, const size_t n, Function
   if (cover){
     vector< IntegerVector > cover_sets(lm.size());
     for (size_t i = 0; i < n_pts; ++i){
-      cover_sets[closest_landmark[i]].push_back(i+1); // +1 for 1-based indices
+      cover_sets.at(closest_landmark[i]).push_back(i+1); // +1 for 1-based indices
     }
     ret["cover"] = wrap(cover_sets);
     ret.attr("radius") = lm_dist[lm.back()]; // capture radius needed to make the cover
   }
-
-  // Return
   return(ret);
 }
+
+// Point cloud wrapper - See 'maxmin_f' below for implementation
+// [[Rcpp::export]]
+List maxmin_pc(const NumericMatrix& x, const double eps, const size_t n, Function dist_f,
+               const size_t metric = 1, const size_t seed = 0, const size_t pick = 0,
+               const bool cover = false){
+  const size_t n_pts = x.nrow();
+  if (seed < 0 || seed >= n_pts){ stop("Invalid seed point."); }
+
+  // Choose the distance function
+  DistFunction dist;
+  if (metric == 0){
+    dist = [&x, dist_f](size_t i, size_t j) { return as< double >(dist_f(x.row(i), x.row(j))); };
+  } else if (metric == 1){
+    dist = [&x](size_t i, size_t j) { return sq_dist(x.row(i), x.row(j)); };
+  } else if (metric == 2){
+    dist = [&x](size_t i, size_t j) { return man_dist(x.row(i), x.row(j)); };
+  } else if (metric == 3){
+    dist = [&x](size_t i, size_t j) { return max_dist(x.row(i), x.row(j)); };
+  } else {
+    stop("Invalid distance metric option chosen.");
+  }
+
+  // Call the generalized procedure
+  return maxmin_f(dist, n_pts, eps, n, seed, pick, cover);
+}
+
+// Converts (i,j) indices in the range { 0, 1, ..., n - 1 } to its 0-based position
+// in a lexicographical ordering of the (n choose 2) combinations.
+constexpr size_t to_nat_2(size_t i, size_t j, size_t n) noexcept {
+  return i < j ? (n*i - i*(i+1)/2 + j - i - 1) : (n*j - j*(j+1)/2 + i - j - 1);
+}
+
+// 'dist' object wrapper - See 'maxmin_f' below for implementation
+// [[Rcpp::export]]
+List maxmin_dist(const NumericVector& x, const size_t n_pts,
+               const double eps, const size_t n,
+               const size_t seed = 0, const size_t pick = 0,
+               const bool cover = false){
+  if (seed < 0 || seed >= n_pts){ stop("Invalid seed point."); }
+
+  // Parameterize the distance function
+  DistFunction dist = [&x, n_pts](size_t i, size_t j) -> double {
+    return x[to_nat_2(i,j,n_pts)];
+  };
+
+  // Call the generalized procedure
+  return maxmin_f(dist, n_pts, eps, n, seed, pick, cover);
+}
+
 
 
