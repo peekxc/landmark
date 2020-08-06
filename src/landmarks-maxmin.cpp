@@ -189,9 +189,21 @@ List maxmin_f(DistFunction dist_f, const size_t n_pts,
   // Remove initial seed from candidates
   candidate_pts.erase(begin(candidate_pts) + seed);
 
+  double cover_radius = std::numeric_limits<double>::infinity();
+  // for (auto pt_idx: candidate_pts){
+  //   double c_dist = dist_f(seed, pt_idx);
+  //   if (c_dist < lm_dist[pt_idx]){
+  //     lm_dist[pt_idx] = c_dist; // update minimum landmark distance
+  //   }
+  //   if (c_dist > cover_radius){
+  //     cover_radius = c_dist;
+  //   }
+  // }
+
+
   // Generate the landmarks
+  // bool stop_reached = is_finished(1, cover_radius);
   bool stop_reached = false;
-  double cover_radius = std::numeric_limits< double >::infinity();
   while (!stop_reached){
     // Inductively, replace point-to-landmark distances if lower than previously computed
     const size_t c_lm = lm.back();
@@ -227,13 +239,15 @@ List maxmin_f(DistFunction dist_f, const size_t n_pts,
 
     // If the iterator is valid, we have a new landmark, otherwise we're finished
     if (max_landmark != end(candidate_pts)){
-      lm.push_back(*max_landmark);
       // Rprintf("max lm dist: %g, lm size: %d\n", lm_dist[(*max_landmark)], lm.size());
       stop_reached = is_finished(lm.size(), lm_dist[(*max_landmark)]);
       if (stop_reached){
         cover_radius = lm_dist[(*max_landmark)];
       }
-      candidate_pts.erase(max_landmark);
+      else {
+        lm.push_back(*max_landmark);
+        candidate_pts.erase(max_landmark);
+      }
     } else {
       stop_reached = true;
     }

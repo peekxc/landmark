@@ -20,7 +20,7 @@ test_that("minmax and maxmin procedures work on a multiple data matrices", {
 })
 
 # maxmin landmarks in C++
-
+# The C++ implementation implements a different stopping criterion, so these no longer make sense.
 test_that("balls contain points exactly radius from center", {
   mm_r1 <- landmarks_maxmin(bar, radius = 1, seed_index = 3L)
   expect_identical(mm_r1, 3L)
@@ -31,10 +31,9 @@ test_that("2-set cover uses endpoints", {
   expect_identical(mm_n2, c(1L, 6L))
 })
 
-# MJP: Note this test has changed
 test_that("half-diameter-radius cover uses endpoints only", {
   mm_r1 <- landmarks_maxmin(bar, radius = 1, engine = "C++")
-  expect_identical(mm_r1, c(1L, 6L, 3L))
+  expect_identical(mm_r1, c(1L, 6L))
 })
 
 test_that("complete landmark set grows leftward before righward", {
@@ -49,12 +48,8 @@ test_that("2-set cover uses endpoints", {
   expect_identical(mm_n2, c(1L, 6L))
 })
 
-# MJP: Note this test has changed
 test_that("half-diameter-radius cover uses endpoints only", {
   mm_r1 <- landmarks_maxmin(bar, radius = 1, engine = "R")
-  expect_identical(mm_r1, c(1L, 6L, 3L))
-
-  mm_r1 <- landmarks_maxmin(bar, radius = 2, engine = "R")
   expect_identical(mm_r1, c(1L, 6L))
 })
 

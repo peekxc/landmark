@@ -41,7 +41,7 @@ for (i in seq(length(lm$landmark))){
   for (pt_idx in cover){
     pt <- iris_pca$x[pt_idx,]
     landmark_pt <- iris_pca$x[lm$landmark[i],]
-    segments(x0 = pt[1], x1 = landmark_pt[1], y0 = pt[2], y1 = landmark_pt[2], col = adjustcolor("gray", alpha.f = 0.20))
+    segments(x0 = pt[1], x1 = landmark_pt[1], y0 = pt[2], y1 = landmark_pt[2], col = adjustcolor("gray", alpha.f = 0.40))
   }
 }
 points(iris_pca$x[lm$landmark,], pch = 20, col = pt_colors)
