@@ -183,17 +183,15 @@ List maxmin_f(DistFunction dist_f, const size_t n_pts,
   if (n != 0){ lm.reserve(n); }
   lm.push_back(seed);
 
-  // Remove initial seed from candidates
-  candidate_pts.erase(begin(candidate_pts) + seed);
-
-  // Indices assign each point to its closest landmark index
-  vector< size_t > closest_landmark(n_pts, seed);
-
   // Preallocate distance vector for landmarks; one for each point
   std::vector< double > lm_dist(n_pts, std::numeric_limits<double>::infinity());
 
+  // Remove initial seed from candidates
+  candidate_pts.erase(begin(candidate_pts) + seed);
+
   // Generate the landmarks
   bool stop_reached = false;
+  double cover_radius = std::numeric_limits< double >::infinity();
   while (!stop_reached){
     // Inductively, replace point-to-landmark distances if lower than previously computed
     const size_t c_lm = lm.back();
@@ -202,8 +200,7 @@ List maxmin_f(DistFunction dist_f, const size_t n_pts,
     for (auto idx: candidate_pts){
       double c_dist = dist_f(c_lm, idx);
       if (c_dist < lm_dist[idx]){
-        lm_dist[idx] = c_dist;                  // update minimum landmark distance
-        closest_landmark[idx] = lm.size() - 1;  // mark which landmark was closest, by index
+        lm_dist[idx] = c_dist; // update minimum landmark distance
       }
     }
 
@@ -230,9 +227,12 @@ List maxmin_f(DistFunction dist_f, const size_t n_pts,
 
     // If the iterator is valid, we have a new landmark, otherwise we're finished
     if (max_landmark != end(candidate_pts)){
-      // Rprintf("max lm dist: %g\n", lm_dist[(*max_landmark)]);
       lm.push_back(*max_landmark);
+      // Rprintf("max lm dist: %g, lm size: %d\n", lm_dist[(*max_landmark)], lm.size());
       stop_reached = is_finished(lm.size(), lm_dist[(*max_landmark)]);
+      if (stop_reached){
+        cover_radius = lm_dist[(*max_landmark)];
+      }
       candidate_pts.erase(max_landmark);
     } else {
       stop_reached = true;
@@ -245,12 +245,17 @@ List maxmin_f(DistFunction dist_f, const size_t n_pts,
 
   // If requested, collect points into a cover
   if (cover){
+    const double radius = (eps == -1.0) ? cover_radius + std::numeric_limits< double >::epsilon() : eps;
     vector< IntegerVector > cover_sets(lm.size());
     for (size_t i = 0; i < n_pts; ++i){
-      cover_sets.at(closest_landmark[i]).push_back(i+1); // +1 for 1-based indices
+      for (size_t lm_j = 0; lm_j < lm.size(); ++lm_j){
+        if (lm[lm_j] == i || dist_f(lm[lm_j], i) <= radius){
+          cover_sets.at(lm_j).push_back(i+1);// +1 for 1-based indices
+        }
+      }
     }
     ret["cover"] = wrap(cover_sets);
-    ret.attr("radius") = lm_dist[lm.back()]; // capture radius needed to make the cover
+    ret.attr("radius") = cover_radius; // capture radius needed to make the cover
   }
   return(ret);
 }

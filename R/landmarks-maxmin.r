@@ -74,7 +74,11 @@ landmarks_maxmin <- function(
   dist_f <- ifelse(metric > 0, identity, function(x,y) { as.numeric(proxy::dist(rbind(x,y), method = dist_method)) })
 
   # if neither parameter is specified, limit the set to 24 landmarks
-  num <- ifelse(missing(num) && missing(radius), min(n_pts, 24L), as.integer(num))
+  if (missing(num) && !missing(radius)){
+    num <- 0L
+  } else if (missing(num) && missing(radius)){
+    num <- min(n_pts, 24L)
+  }
 
   ## If fraction supplied, compute diameter and apply fraction to it to get radius
   if (frac) {
@@ -107,7 +111,9 @@ landmarks_maxmin <- function(
 
   ## If cover requested, return a data.frame, otherwise just return the landmark indices
   if (cover){
+    cover_radius <- attr(res, "radius")
     res <- data.frame(landmark = res$landmarks, cover_set = I(res$cover))
+    attr(res, "cover_radius") <- cover_radius
   } else {
     res <- as.vector(res$landmarks)
   }
@@ -139,6 +145,7 @@ minmax <- function(x, y = NULL, dist_method = "euclidean") {
   if (missing(y) || is.null(y)) { y <- x }
 
   ## If dist object supplied, use lower-triangular indices per index
+  largest_nonzero <- function(x){ max(x[x != 0]) }
   if (is(x, "dist")){
     n <- attr(x, "Size")
     to_nat <- function(i,j,n){ ifelse(i < j, n*i - i*(i+1)/2 + j - i - 1, n*j - j*(j+1)/2 + i - j - 1) }
@@ -146,7 +153,8 @@ minmax <- function(x, y = NULL, dist_method = "euclidean") {
       max(x[to_nat(i-1L, setdiff(seq(n), i)-1L, n)+1L])
     })
   } else {
-    max_dist <- sapply(seq(n), function(i){ max(proxy::dist(x[i,,drop=FALSE], xy)) })
+    n <- NROW(x)
+    max_dist <- unlist(sapply(seq(n), function(i){ largest_nonzero(proxy::dist(x[i,,drop=FALSE], y)) }))
   }
   return(which(max_dist == min(max_dist)))
 }
@@ -163,6 +171,7 @@ maxmin <- function(x, y = NULL, dist_method = "euclidean") {
   if (missing(y) || is.null(y)) { y <- x }
 
   ## If dist object supplied, use lower-triangular indices per index
+  smallest_nonzero <- function(x){ min(x[x != 0]) }
   if (is(x, "dist")){
     n <- attr(x, "Size")
     to_nat <- function(i,j,n){ ifelse(i < j, n*i - i*(i+1)/2 + j - i - 1, n*j - j*(j+1)/2 + i - j - 1) }
@@ -170,7 +179,8 @@ maxmin <- function(x, y = NULL, dist_method = "euclidean") {
       min(x[to_nat(i-1L, setdiff(seq(n), i)-1L, n)+1L])
     })
   } else {
-    min_dist <- sapply(seq(n), function(i){ min(proxy::dist(x[i,,drop=FALSE], xy)) })
+    n <- NROW(x)
+    min_dist <- unlist(sapply(seq(n), function(i){ smallest_nonzero(proxy::dist(x[i,,drop=FALSE], y)) }))
   }
   return(which(min_dist == max(min_dist)))
 }
