@@ -12,6 +12,8 @@ l <- landmarks_maxmin(X, seed_index = "minmax")
 plot(X, asp = 1, pch = NA)
 text(X, labels = order(l))
 
+library(landmark)
+
 ## Iris data set example
 iris_pca <- prcomp(iris[,1:4], retx = TRUE, rank. = 2)
 lm <- landmarks_maxmin(iris_pca$x, num = 15, cover = TRUE)

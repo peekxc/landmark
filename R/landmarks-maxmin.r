@@ -279,7 +279,7 @@ landmarks_maxmin_orig <- function(
 
   if (!is.null(num)) {
     if (missing(dist_method) || toupper(dist_method) == "EUCLIDEAN") {
-      lmk_idx <- landmarks_maxmin(x, num, seed_index)
+      lmk_idx <- landmarks_maxmin(x, dist_method = "euclidean", num = num, seed_index = seed_index)
     } else if (requireNamespace("proxy", quietly = TRUE)) {
       stopifnot(toupper(dist_method) %in%
                   toupper(proxy::pr_DB$get_entry_names()))
